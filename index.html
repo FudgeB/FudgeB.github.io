@@ -9,13 +9,13 @@
 		<link rel="stylesheet" type="text/css" href="styles/index.css">
 	</head>
 	
-	<body onload="drawBeginning()">
+	<body onload="loader()" onresize="resize()">
 		<h1>The beginnings of a page</h1>
-		<canvas id="beginning" width="400" height="400">
-		<p>
-			Canvas beginning
-		</p>
-		</canvas>
+		<div>
+			<canvas id="gameCanvas" width="400" height="400" onmousemove="mouseMoveEvent(event)">
+				Canvas beginning
+			</canvas>
+		</div>
 	</body>
 
 </html>
