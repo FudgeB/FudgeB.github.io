@@ -19,6 +19,35 @@ function randomInt(start,end){
 function randomFloat(start,end){
 	return Math.random() * (end-start) + start;
 }
+function polarToXY(radius, angle){
+	//var angle = this.angleTo(target);
+	var x = radius*Math.cos(angle*Math.PI/180);
+	var y = radius*Math.sin(angle*Math.PI/180);
+	return new Coord(x, y);
+}
+function xyToPolar(x,y){
+	var radius = (x**2 + y**2)**0.5;
+	var angle = Math.atan2(y,x)*(180/Math.PI);
+	return new Coord(radius, angle);
+	/*
+	 * var deltaX = x2 - x1;
+	 * var deltaY = y2 - y1;
+	 * var rad = Math.atan2(deltaY, deltaX); // In radians
+	 * Then you can convert it to degrees as easy as:
+	 * var deg = rad * (180 / Math.PI)
+	 * -----------------------------------------------------
+	 * 
+	 * r = (x2 + y2)1/2                            (1)
+	 * where
+	 * r = distance from origin to the point
+	 * x = Cartesian x-coordinate
+	 * y = Cartesian y-coordinate
+	 * θ = atan(y / x)
+	 *  = tan-1(y / x)                          (2)
+	 *  where
+	 *  θ = angle relative to the zero axis (degrees)  
+	 */
+}
 
 ////////////////////////////  Coord  ////////////////////////////
 function Coord (x, y){
@@ -79,6 +108,7 @@ Square.prototype = {
 		constructor: Square,
 		draw: function(context, color){
 			context.fillStyle = color.rgbString();
+			context.lineWidth = 1;
 			context.strokeStyle = color.rgbString();
 			context.strokeRect(this.pos.x, this.pos.y, this.size, this.size);
 			context.fillRect(this.pos.x, this.pos.y, this.size, this.size);
@@ -154,20 +184,18 @@ Grid.prototype = {
 function Ball(pos,area){
 	this.size = 3.5;
 	this.pos = pos;
-	this.pos.y -= this.size/2+1;
+	this.pos.y -= (this.size/2+1);
 	this.startY = this.pos.y;
 	this.area = area;
 	this.isMoving = false;
 	this.dir = new Coord(randomInt(-1,2),-1)
-	this.movMin = -2;
+	this.movMin = 5;
 	this.movMax = 10;
 	//randomInt(start,end);//
-	var movX = Math.random();//randomFloat(0,1);
-	var movY = Math.random();//randomFloat(this.movMin,0);
-	while(movY === 0){
-		movY = Math.random();//randomFloat(movMin,0);
-	}
+	var movX = randomFloat(this.movMin*10, this.movMax*10)/(this.movMax*10);//Math.random();//
+	var movY = randomFloat(this.movMin*10, this.movMax*10)/(this.movMax*10);//Math.random();//randomFloat(this.movMin,0);
 	this.mov = new Coord(movX,movY);
+	this.hitPaddle = false;
 	//this.context = context;
 	this.colors = [];
 	this.numColors = 3;
@@ -187,9 +215,9 @@ Ball.prototype = {
 			context.arc(this.pos.x, this.pos.y, this.size, 0, 2 * Math.PI, false);
 			context.fillStyle = gradient;
 			context.fill();
-			//this.context.lineWidth = 0.25;
-			//this.context.strokeStyle = '#000000';
-			//this.context.stroke();
+			context.lineWidth = 0.25;
+			context.strokeStyle = '#000000';
+			context.stroke();
 		},
 		setColors: function(){
 			for(var i=0; i<this.numColors; i++){
@@ -204,28 +232,31 @@ Ball.prototype = {
 			}
 		},
 		move: function(){
+			var xAmount = this.mov.x*this.movMax*this.dir.x;
+			var yAmount = this.mov.y*this.movMax*this.dir.y;
 			if(this.isMoving){
-				if(this.pos.x + this.mov.x*this.movMax*this.dir.x < this.size){
+				if(this.pos.x + xAmount < this.size){
 					this.pos.x = this.size;
 					this.dir.x *= -1;
 				}
-				else if(this.pos.x + this.mov.x*this.movMax*this.dir.x > this.area.x-this.size){
+				else if(this.pos.x + xAmount > this.area.x-this.size){
 					this.pos.x = this.area.x-this.size;
 					this.dir.x *= -1;
 				}
 				else {
-					this.pos.x += this.mov.x*this.movMax*this.dir.x;
+					this.pos.x += xAmount;
 				}
-				if(this.pos.y + this.mov.y*this.movMax*this.dir.y < this.size){
+				if(this.pos.y + yAmount < this.size){
 					this.pos.y = this.size;
 					this.dir.y *= -1;
 				}
-				else if(this.pos.y + this.mov.y*this.movMax*this.dir.y > this.area.y-this.size){
+				else if(this.pos.y + yAmount > this.area.y-this.size){
+					//// lose ball
 					this.pos.y = this.area.y-this.size;
 					this.dir.y *= -1;
 				}
 				else{
-					this.pos.y += this.mov.y*this.movMax*this.dir.y;
+					this.pos.y += yAmount;
 				}
 			}
 		},
@@ -238,9 +269,74 @@ Ball.prototype = {
 			}
 			this.pos.x = posX;
 			this.pos.y = this.startY;
+		},
+		checkPaddle: function(paddle){
+			var xAmount = this.mov.x*this.movMax*this.dir.x;
+			var yAmount = this.mov.y*this.movMax*this.dir.y;
+			var pWidth = paddle.size.x;
+			var pHeight = paddle.size.y;
+			var pXpos = paddle.pos.x;
+			var pYpos = paddle.pos.y;
+			
+			if(this.pos.y + yAmount > pYpos - (pHeight/2)/* - (this.size/2-1)*/){
+				if(this.pos.x + xAmount > pXpos - (pWidth/2) && this.pos.x + xAmount < pXpos + (pWidth/2)){
+					console.log("hit paddle: x=" + this.pos.x + ", y=" + this.pos.y);
+					this.hitPaddle = true;
+					var hitX = this.pos.x - pXpos;
+					if(hitX === 0){
+						this.dir.x = 0;
+						this.mov.x = 0;
+					}
+					else if(hitX < 0){
+						this.dir.x = -1;
+						//hitX *= -1; // so angle will be positive
+						var invert = pWidth/2 + hitX; // add because hitX is negative;
+						
+						
+						var angle = this.findAngle(invert,pWidth/2);  // in degrees
+						var newRadius = randomFloat(11,15);			//////   11 to 15 for radius converts as 5 to 10 x,y
+						var newMov = polarToXY(newRadius, angle);
+						this.mov.x = newMov.x/this.movMax;
+						this.mov.y = newMov.y/this.movMax;
+					}
+					else if(hitX > 0){
+						this.dir.x = 1;
+						var invert = pWidth/2 - hitX;						
+						
+						var angle = this.findAngle(invert,pWidth/2);  // in degrees
+						var newRadius = randomFloat(11,15);			//////   11 to 15 for radius converts as 5 to 10 x,y
+						var newMov = polarToXY(newRadius, angle);
+						this.mov.x = newMov.x/this.movMax;
+						this.mov.y = newMov.y/this.movMax;
+					}
+					this.pos.y = pYpos - (pHeight/2);// - (this.size/2-1);
+					this.dir.y *= -1;
+				}
+//				else{
+//					console.log("lose ball");
+//					this.pos.y = pYpos - (pHeight/2);// - (this.size/2-1);
+//					this.dir.y *= -1;
+//				}
+			}
+			else if(this.pos.y + yAmount > pYpos){
+				if(this.pos.x + xAmount > pXpos - (pWidth/2) && this.pos.x + xAmount < pXpos + (pWidth/2)){
+					if(this.pos.x < pXpos){
+						this.pos.x = pXpos - pWidth/2;
+					}
+					else{
+						this.poas.x = pXpos + pWidth/2;
+					}
+					this.dir.x *= -1;
+				}
+			}
+		},
+		findAngle: function(hitX,halfWidth){
+			// max angle is 90 degrees; min angle is 26 degrees
+			return ((90-26)/(halfWidth)*hitX + 26);
+		//   //            (b-a)(x - min)
+		//   //     f(x) = --------------  + a
+		//   //              max - min
 		}
-		
-		
 }
 ////////////////////  end Ball  ////////////////////////
 
@@ -330,6 +426,7 @@ BrickGame.prototype = {
 		},
 		move: function(){
 			if(this.ball != undefined){
+				this.ball.checkPaddle(this.paddle);
 				this.ball.move();
 				this.clear();
 				this.draw();
