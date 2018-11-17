@@ -200,14 +200,36 @@ function Ball(paddle,area){
 //	this.startY = this.pos.y;
 	this.area = area;
 	this.isMoving = false;
-	this.dir = new Coord(randomInt(-1,2),-1)
-	this.movMin = 5;
+	var xDir = randomInt(-1,2);
+	while(xDir === 0){
+		xDir = randomInt(-1,2);
+	}
+	this.dir = new Coord(xDir,-1)
+//	this.movMin = 5;
+//	this.movMax = 10;
+//	//randomInt(start,end);//
+//	var movX = randomFloat(this.movMin*10, this.movMax*10)/(this.movMax*10);//Math.random();//
+//	var movY = randomFloat(this.movMin*10, this.movMax*10)/(this.movMax*10);//Math.random();//randomFloat(this.movMin,0);
+	
 	this.movMax = 10;
-	//randomInt(start,end);//
-	var movX = randomFloat(this.movMin*10, this.movMax*10)/(this.movMax*10);//Math.random();//
-	var movY = randomFloat(this.movMin*10, this.movMax*10)/(this.movMax*10);//Math.random();//randomFloat(this.movMin,0);
+	this.maxAngle = 90;
+	this.minAngle = 20;
+	this.maxMagnitude = 12;
+	this.minMagnitude = 6;
+	var mag = randomFloat(this.minMagnitude, this.maxMagnitude);
+	var angle = randomFloat(this.minAngle, this.maxAngle);
+	while(angle === 90){
+		angle = randomFloat(this.minAngle, this.maxAngle);
+	}
+	
+	var cartesian = polarToXY(mag, angle);
+	var movX = cartesian.x/this.movMax;
+	var movY = cartesian.y/this.movMax;
+	
 	this.mov = new Coord(movX,movY);
 	this.hitRect = new Coord(0,0);
+	this.intersectH = null;
+	this.intersectV = null;
 	this.hitPos = new Coord(0,0);
 	this.hitTop = false;
 	this.hitBottom = false;
@@ -298,345 +320,222 @@ Ball.prototype = {
 //			this.pos.x = posX;
 //			this.pos.y = this.startY;
 		},
-		collision: function(rect){ 
+		checkHorizontal: function(bRight, bLeft, rect, slope){ // top and bottom
+			var hit = false;
+			
+			var yLine;
+			if(this.dir.y === 1){
+				yLine = rect.pos.y;
+			}
+			else if(this.dir.y === -1){
+				yLine = rect.pos.y + rect.size.y;
+			}
+			else{
+				console.log("error in checkHorizontal()");
+			}
+			
+			var offset = (this.pos.y + this.dir.y*this.size) - slope.y/slope.x*this.pos.x; // b = Y - mX with (X,Y) as the bottom point of the ball
+			
+			// X = (Y - b) * (1/m)
+			var flatMid = (yLine - offset)*(slope.x/slope.y); // intercept to check top or bottom
+			var flatLeft = (yLine - bRight)*(slope.x/slope.y); // intercept to check left corner of top or bottom
+			var flatRight = (yLine - bLeft)*(slope.x/slope.y); // intercept to check right corner of top or bottom
+			
+			var xIntersect = null;
+			var where = null;
+		
+			if(flatMid >= rect.pos.x && flatMid <= rect.pos.x + rect.size.x){ // check top or bottom
+				xIntersect = flatMid;
+				where = "flatMid";
+				this.hitBounce = true;
+				hit = true;
+			}
+			else if(flatLeft >= rect.pos.x && flatLeft <= rect.pos.x + rect.size.x){ // check left corner of top or bottom
+				xIntersect = flatLeft;
+				where = "flatLeft";
+				this.hitBounce = true;
+				hit = true;
+			}
+			else if(flatRight >= rect.pos.x && flatRight <= rect.pos.x + rect.size.x){ // check right corner of top or bottom
+				xIntersect = flatRight;
+				where = "flatRight";
+				this.hitBounce = true;
+				hit = true;
+			}
+			
+			if(hit){
+				this.intersectH = new Coord(xIntersect, yLine);
+				if(this.dir.y === 1){
+					this.hitTop = true;
+				}
+				else if(this.dir.y === -1){
+					this.hitBottom = true;
+				}
+			}
+			
+			return where;
+		},
+		checkVertical: function(bTop, bBottom, rect, slope){ // left and right
+			// Y = mX + bOffset
+			var hit = false;
+			
+			var xLine;
+			if(this.dir.x === 1){
+				xLine = rect.pos.x;
+			}
+			else if(this.dir.x === -1){
+				xLine = rect.pos.x + rect.size.x;
+			}
+			else{
+				console.log("error in checkVertical()")
+			}
+			
+			var offset =  this.pos.y - slope.y/slope.x*(this.pos.x + this.dir.x*this.size); // b = Y - mX with (X,Y) as the right point of the ball
+			
+			var sideMid = (slope.y/slope.x)*xLine + offset; // intercept to check left or right
+			var sideTop = (slope.y/slope.x)*xLine + bTop; // intercept to check top corner of left or right
+			var sideBottom = (slope.y/slope.x)*xLine + bBottom; // intercept to check bottom corner of left or right
+			
+			var yIntersect = null;
+			var where = null;
+			
+			if(sideMid >= rect.pos.y && sideMid <= rect.pos.y + rect.size.y){ // check left or right
+				yIntersect = sideMid;
+				where = "sideMid";
+				this.hitBounce = true;
+				hit = true;
+			}
+			else if(sideTop >= rect.pos.y && sideTop <= rect.pos.y + rect.size.y){ // check top corner of left or right
+				yIntersect = sideTop;
+				where = "sideTop";
+				this.hitBounce = true;	
+				hit = true;				
+			}
+			else if(sideBottom >= rect.pos.y && sideBottom <= rect.pos.y + rect.size.y){ // check bottom corner of left or right
+				yIntersect = sideBottom;
+				where = "sideBottom";
+				this.hitBounce = true;	
+				hit = true;				
+			}
+			
+			if(hit){
+				this.intersectV = new Coord(xLine, yIntersect);
+				if(this.dir.x === 1){
+					this.hitLeft = true;
+				}
+				else if(this.dir.x === -1){
+					this.hitRight = true;
+				}
+			}
+			
+			return where;
+		},
+		collision: function (rect){
 			var xAmount = this.mov.x*this.movMax*this.dir.x;
 			var yAmount = this.mov.y*this.movMax*this.dir.y;
+			var slope = new Coord(xAmount, yAmount);
 			
 			var xUnit = (xAmount/((xAmount**2 + yAmount**2)**0.5));
 			var yUnit = (yAmount/((xAmount**2 + yAmount**2)**0.5));
-			var yIntersect, xIntersect;
+			
 			var hit = false;
-
 			if(this.pos.y + this.size + yAmount >= rect.pos.y && (this.pos.y - this.size) + yAmount <= rect.pos.y + rect.size.y){
 				if(this.pos.x + this.size + xAmount >= rect.pos.x && (this.pos.x - this.size) + xAmount <= rect.pos.x + rect.size.x){
+					// b = Y - mX with (X,Y) as the points on the edge of the ball that
+					// the line of the ball's movement passes through and its mirror across the vertical or horizontal
 					
-					
-					var yOffset = this.pos.y - yAmount/xAmount*this.pos.x;
-//					var thisXoff = -1*yOffset*xAmount/yAmount;
-					
-					
-					if(this.dir.y == 1){
+					// right and left for checking horizontal corners
+					var bRight = (this.pos.y + yUnit*this.size) - ((slope.y/slope.x) * (this.pos.x + this.dir.x * (xUnit*this.size)));
+					var bLeft = (this.pos.y + yUnit*this.size) - ((slope.y/slope.x) * (this.pos.x + this.dir.x * -1 * (xUnit*this.size)));
 
-						var ballBottom = (this.pos.y + this.size) - yAmount/xAmount*this.pos.x;
-						var topXintersect = (rect.pos.y-ballBottom)*xAmount/yAmount;
-						if(xAmount === 0){
-							topXintersect = this.pos.x
+					// top an bottom for checking vertical corners
+					var bTop = (this.pos.y + this.dir.y * -1 *(yUnit*this.size)) - ((slope.y/slope.x) * (this.pos.x + (xUnit*this.size)));
+					var bBottom = (this.pos.y + this.dir.y *(yUnit*this.size)) - ((slope.y/slope.x) * (this.pos.x + (xUnit*this.size)));
+
+
+
+					var whereH = this.checkHorizontal(bRight, bLeft, rect, slope);
+					var whereV = this.checkVertical(bTop, bBottom, rect, slope);
+
+					if(this.hitTop || this.hitBottom){
+						hit = true;
+						if(whereH == "flatMid"){
+							this.hitPos.x = this.intersectH.x;
+							this.hitPos.y = this.intersectH.y - this.dir.y*this.size;
 						}
-						
-						if(topXintersect <= rect.pos.x + rect.size.x && topXintersect >= rect.pos.x){
-							yIntersect = rect.pos.y;
-							xIntersect = topXintersect;
-							this.hitPos.x = xIntersect;
-							this.hitPos.y = yIntersect-this.size;
-							this.hitTop = true;
-							this.hitBounce = true;
-							hit = true;
+						else if(whereH == "flatLeft"){
+							this.hitPos.x = this.intersectH.x + this.dir.x * (this.size*xUnit);									
+							this.hitPos.y = this.intersectH.y - (this.size*yUnit); 
 						}
-						else if(this.dir.x == 0){
-							if(topXintersect <= rect.pos.x + rect.size.x && topXintersect >= rect.pos.x){
-								yIntersect = rect.pos.y;
-								xIntercept = topXintersect;
-								this.hitPos.x = xIntersect;
-								this.hitPos.y = yIntersect-this.size;
-								this.hitTop = true;
-								this.hitBounce = true;
-							}
-							else{
-								var xUnit45 = (1/((1**2 + 1**2)**0.5));
-								var yUnit45 = (1/((1**2 + 1**2)**0.5));
-								var offLowerRight45 = this.pos.x + (this.size*xUnit45);
-								var offLowerLeft45 = this.pos.x - (this.size*xUnit45);
-								var topRightXintersect45 = offLowerLeft45;
-								var topLeftXintersect45 = offLowerRight45;
-								if(topRightXintersect45 <= rect.pos.x + rect.size.x && topRightXintersect45 >= rect.pos.x){
-									yIntersect = rect.pos.y;
-									xIntersect = topRightXintersect45;
-									this.hitPos.x = xIntersect + this.dir.x * -1 * (this.size*xUnit45);									
-									this.hitPos.y = yIntersect - (this.size*yUnit45); 
-									this.hitTop = true;
-									this.hitBounce = true;
-									hit = true;
-								}
-								else if(topLeftXintersect45 <= rect.pos.x + rect.size.x && topLeftXintersect45 >= rect.pos.x){
-									yIntersect = rect.pos.y;
-									xIntersect = topLeftXintersect45;
-									this.hitPos.x = xIntersect + this.dir.x * (this.size*xUnit45);									
-									this.hitPos.y = yIntersect - (this.size*yUnit45); 
-									this.hitTop = true;
-									this.hitBounce = true;
-									hit = true;
-								}
-							}
-						}						 
-						else {
-							var offLowerRight, offLowerLeft;
-							if(this.dir.x == 1){
-								offLowerRight = (this.pos.y + (this.size*yUnit)) - yAmount/xAmount*(this.pos.x + (this.size*xUnit));
-								offLowerLeft = (this.pos.y + (this.size*yUnit)) - yAmount/xAmount*(this.pos.x - (this.size*xUnit));
-							}
-							else if(this.dir.x == -1){
-								offLowerRight = (this.pos.y + (this.size*yUnit)) - yAmount/xAmount*(this.pos.x - (this.size*xUnit));
-								offLowerLeft = (this.pos.y + (this.size*yUnit)) - yAmount/xAmount*(this.pos.x + (this.size*xUnit));
-							}								
-							
-							if(offLowerRight !== undefined && offLowerLeft != undefined){
-								var topRightXintersect = (rect.pos.y-offLowerLeft)*xAmount/yAmount;
-								var topLeftXintersect = (rect.pos.y-offLowerRight)*xAmount/yAmount;
-								if(topRightXintersect <= rect.pos.x + rect.size.x && topRightXintersect >= rect.pos.x){
-									yIntersect = rect.pos.y;
-									xIntersect = topRightXintersect;
-									this.hitPos.x = xIntersect + this.dir.x * -1 * (this.size*xUnit);									
-									this.hitPos.y = yIntersect - (this.size*yUnit); 
-									this.hitTop = true;
-									this.hitBounce = true;
-									hit = true;
-								}
-								else if(topLeftXintersect <= rect.pos.x + rect.size.x && topLeftXintersect >= rect.pos.x){
-									yIntersect = rect.pos.y;
-									xIntersect = topLeftXintersect;
-									this.hitPos.x = xIntersect + this.dir.x * (this.size*xUnit);									
-									this.hitPos.y = yIntersect - (this.size*yUnit); 
-									this.hitTop = true;
-									this.hitBounce = true;
-									hit = true;
-								}
-							}
-							
+						else if(whereH == "flatRight"){
+							this.hitPos.x = this.intersectH.x + this.dir.x * -1 * (this.size*xUnit);
+							this.hitPos.y = this.intersectH.y - (this.size*yUnit); 
+						}
+						else{
+							console.log("error in collision() hitTop || hitBottom")
 						}
 					}
-					else if(this.dir.y == -1){
-						var ballTop = (this.pos.y - this.size) - yAmount/xAmount*this.pos.x;
-						var bottomXintersect = ((rect.pos.y+rect.size.y)-ballTop)*xAmount/yAmount;
-						if(xAmount === 0){
-							bottomXintersect = this.pos.x
+					if(this.hitLeft || this.hitRight){
+						hit = true;
+						if(whereV == "sideMid"){
+							this.hitPos.x = this.intersectV.x - this.dir.y*this.size;
+							this.hitPos.y = this.intersectV.y;
 						}
-						
-						if(bottomXintersect <= rect.pos.x + rect.size.x && bottomXintersect >= rect.pos.x){
-							yIntersect = rect.pos.y + rect.size.y;
-							xIntersect = bottomXintersect;
-							this.hitPos.x = xIntersect;
-							this.hitPos.y = yIntersect+this.size;
-							this.hitBottom = true;
-							this.hitBounce = true;
-							hit = true;
+						else if(whereV == "sideTop"){
+							this.hitPos.x = this.intersectV.x - (xUnit*this.size);
+							this.hitPos.y = this.intersectV.y + this.dir.y *(yUnit*this.size) 
 						}
-						else if(this.dir.x == 0){
-							if(bottomXintersect <= rect.pos.x + rect.size.x && bottomXintersect >= rect.pos.x){
-								yIntersect = rect.pos.y + rect.size.y;
-								xIntercept = bottomXintersect;
-								this.hitPos.x = xIntersect;
-								this.hitPos.y = yIntersect+this.size;
-								this.hitBottom = true;
-								this.hitBounce = true;
-							}
-							else{
-								var xUnit45 = (1/((1**2 + 1**2)**0.5));
-								var yUnit45 = (-1/((1**2 + 1**2)**0.5));
-								var offUpperRight45 = this.pos.x + (this.size*xUnit45);
-								var offUpperLeft45 = this.pos.x - (this.size*xUnit45);
-								var bottomRightXintersect45 = offUpperLeft45;
-								var bottomLeftXintersect45 = offUpperRight45;
-								if(bottomRightXintersect45 <= rect.pos.x + rect.size.x && bottomRightXintersect45 >= rect.pos.x){
-									yIntersect = rect.pos.y+rect.size.y;
-									xIntersect = bottomRightXintersect45;
-									this.hitPos.x = xIntersect + this.dir.x * -1 * (this.size*xUnit45);									
-									this.hitPos.y = yIntersect - (this.size*yUnit45); 
-									this.hitBottom = true;
-									this.hitBounce = true;
-									hit = true;
-								}
-								else if(bottomLeftXintersect45 <= rect.pos.x + rect.size.x && bottomLeftXintersect45 >= rect.pos.x){
-									yIntersect = rect.pos.y+rect.size.y;
-									xIntersect = bottomLeftXintersect45;
-									this.hitPos.x = xIntersect + this.dir.x * (this.size*xUnit45);									
-									this.hitPos.y = yIntersect - (this.size*yUnit45); 
-									this.hitBottom = true;
-									this.hitBounce = true;
-									hit = true;
-								}
-							}
-						}						 
-						else {
-							var offUpperRight, offUpperLeft;
-							if(this.dir.x == 1){
-								offUpperRight = (this.pos.y + (this.size*yUnit)) - yAmount/xAmount*(this.pos.x + (this.size*xUnit));
-								offUpperLeft = (this.pos.y + (this.size*yUnit)) - yAmount/xAmount*(this.pos.x - (this.size*xUnit));
-							}
-							else if(this.dir.x == -1){
-								offUpperRight = (this.pos.y + (this.size*yUnit)) - yAmount/xAmount*(this.pos.x - (this.size*xUnit));
-								offUpperLeft = (this.pos.y + (this.size*yUnit)) - yAmount/xAmount*(this.pos.x + (this.size*xUnit));
-							}								
-							
-							if(offUpperRight !== undefined && offUpperLeft != undefined){
-								var bottomRightXintersect = ((rect.pos.y+rect.size.y)-offUpperLeft)*xAmount/yAmount;
-								var bottomLeftXintersect = ((rect.pos.y+rect.size.y)-offUpperRight)*xAmount/yAmount;
-								if(bottomRightXintersect <= rect.pos.x + rect.size.x && bottomRightXintersect >= rect.pos.x){
-									yIntersect = rect.pos.y + rect.size.y;
-									xIntersect = bottomRightXintersect;
-									this.hitPos.x = xIntersect + this.dir.x * -1 * (this.size*xUnit);									
-									this.hitPos.y = yIntersect - (this.size*yUnit); 
-									this.hitBottom = true;
-									this.hitBounce = true;
-									hit = true;
-								}
-								else if(bottomLeftXintersect <= rect.pos.x + rect.size.x && bottomLeftXintersect >= rect.pos.x){
-									yIntersect = rect.pos.y+rect.size.y;
-									xIntersect = bottomLeftXintersect;
-									this.hitPos.x = xIntersect + this.dir.x * (this.size*xUnit);									
-									this.hitPos.y = yIntersect - (this.size*yUnit); 
-									this.hitBottom = true;
-									this.hitBounce = true;
-									hit = true;
-								}
-							}
-							
+						else if(whereV == "sideBottom"){
+							this.hitPos.x = this.intersectV.x - (xUnit*this.size);
+							this.hitPos.y =  this.intersectV.y + this.dir.y * -1 *(yUnit*this.size)
+						}
+						else{
+							console.log("error in collision() hitLeft || hitRight")
 						}
 					}
 
-					var leftYintersect = yAmount/xAmount*rect.pos.x + yOffset;
-					var rightYintersect = yAmount/xAmount*(rect.pos.x + rect.size.x) + yOffset;
-					
-					if(this.dir.x == 1){
-						if(leftYintersect <= rect.pos.y + rect.size.y && leftYintersect >= rect.pos.y){
-							yIntersect = leftYintersect;
-							xIntersect = rect.pos.x;
-							this.hitLeft = true;
-							this.hitBounce = true;
-							hit = true;
-						}
-					}
-					else if(this.dir.x == -1){
-						if(rightYintersect <= rect.pos.y + rect.size.y && rightYintersect >= rect.pos.y){
-							yIntersect = rightYintersect;
-							xIntersect = rect.pos.x + rect.size.x;
-							this.hitRight = true;
-							this.hitBounce = true;
-							hit = true;
-						}
-					}
+				}
+			}
+			return hit;
+		},
+		findBounceAngle: function(rect){
+			//scaleMov: function(){
+		//	
+		//   //            (b-a)(x - min)
+		//   //     f(x) = --------------  + a
+		//   //              max - min
+		//},
+			if(this.intersectH.x - (rect.pos.x + rect.size.x/2) > 0){
+				this.dir.x = 1;
+			}
+			else if(this.intersectH.x - (rect.pos.x + rect.size.x/2) < 0){
+				this.dir.x = -1;
+			}
+			else{
+				var xDir = randomInt(-1,2);
+				while(xDir === 0){
+					xDir = randomInt(-1,2);
+				}
+				this.dir = new Coord(xDir,-1)
+			}
+			
+			var angle = (this.maxAngle - this.minAngle) * (rect.size.x/2 - Math.abs(this.intersectH.x - (rect.pos.x+rect.size.x/2)))/(rect.size.x/2) + this.minAngle;
+			if(angle === 90){
+				angle -= 0.1;
+			}	
+			var mag = randomFloat(this.minMagnitude, this.maxMagnitude);
 
-					
-					if(hit){
-						this.hitRect.y = yIntersect;
-						this.hitRect.x = xIntersect;
-						// this.hitPos
-					}
-					
-					return hit;
-					
-					
-					/*
-					 *  -1,1
-					 *  -1,-1
-					 *  1,-1
-					 *  1,1
-					 *  0,1
-					 *  0,-1
-					 *  
-					 *  
-					 *  	this.hitPaddle = false;
-					 *  	this.hitTop = false;
-					 *  	this.hitBottom = false;
-					 *  	this.hitLeft = false;
-					 *  	this.hitRight = false;
-					 *  	this.hitBounce = false;
-					 *  
-					 *  
-					 *  
-					 *     Given points a, b find point c
-					 *     D = a to b
-					 *     D2 = a to c
-					 *     
-					 *     D = √( (Xa-Xb)^2 + (Ya-Yb)^2 )
-					 *     
-					 *     The formulas that you can find Xa, Xb, Xc, D, D2
-					 *     
-					 *     SINab = (Xa-Xb)  /  D
-					 *     
-					 *     SINac = (Xa-Xc)  /  D2
-					 *     
-					 *     
-					 *     But SINab and SINac share the same corner so they are equal:
-					 *     SINab = SINac
-					 *     
-					 *     (Xa-Xb) / D = (Xa-Xc) / R 
-					 *     
-					 *     Since you know the distance (D2) between Xa and Xc that you are looking for, 
-					 *     you can easily solve the following:
-					 *     
-					 *     Xc = Xa - (D2*(Xa-Xb)) / D
-					 *     Yc = Ya - (D2*(Ya-Yb)) / D
-					 *     
-					 *     
-					 *     In conclusion by solving the formulas for D and Xc you are done. 
-					 *     (You need one for the Y as well, just replace X with Y in last formula)
-					 *  
-					 *  /////////////////////////////////////////////////////////////////////////
-					 *  
-					 *  Let v=(x1,y1)−(x0,y0). Normalize this to u = v / ||v||. 
-					 *  
-					 *  The point along your line at a distance d from (x0,y0) is 
-					 *  then (x0,y0)+du, if you want it in the direction of (x1,y1), 
-					 *  or (x0,y0)−du, if you want it in the opposite direction. 
-					 *  One advantage of doing the calculation this way is that you won't run into 
-					 *  a problem with division by zero in the case that x0=x1.
-					 *  
-					 *  The length of a vector v=(v1,v2) is defined as 
-					 *  
-					 *  ||v|| = √(v1^2 + v2^2)
-					 *   
-					 *  The vector v / (||v||), that is, 
-					 *  
-					 *  (v1/ √(v1^2+v2^2),v2/ √(v1^2+v2^2) ),
-					 *  
-					 *   
-					 *  points in the same direction as v and has unit length. 
-					 *  For example, if v=(3,4), then u=(3/5,4/5).
-					 *  
-					 *  
-					 *  ////////////////////////////////////////////////////////////////////////////
-					 *  
-					 *  
-					 *          −(2(mc−mq−p)) ± √((2(mc−mq−p))^2−4(m^2+1)(q^2−r^2+p^2−2cq+c^2))
-					 *   y = m (−−−−−−−−−−−−−−−−−−−−−−−−−−−−−−−−−−−−−−−−−−−−−−−−−−−−−−−−−−−−−−−)   + (q^2−r^2+p^2−2cq+c^2)
-					 *                2(m^2+1)
-					 *  
-					 *  
-					 *  
-					 *  Let's say you have the line   Y = mX + c   and the circle   (x − p)^2 + (y − q)^2 = r^2.
-					 *  First, substitute y=mx+c into (x−p)^2+(y−q)^2=r^2 to give
-					 *  
-					 *  (x−p)^2+(mx+c−q)^2=r^2.
-					 *  
-					 *  Next, expand out both brackets, bring the r^2 over to the left, and collect like terms:
-					 *  
-					 *  (m^2+1)x^2+2(mc−mq−p)x+(q^2−r^2+p^2−2cq+c^2)=0.
-					 *  This is a quadratic in x and can be solved using the quadratic formula.
-					 *  Let us relabel the coefficients to give Ax^2+Bx+C=0, then we have
-					 *  
-					 *     x = −B ± √(B^2−4AC)
-					 *    −−−−−−−−−−−−−−−−−−−−
-					 *             2A
-					 *  
-					 *  If B^2−4AC < 0 then the line misses the circle.
-					 *  If B^2−4AC = 0 then the line is tangent to the circle.
-					 *  If B^2−4AC > 0 then the line meets the circle in two distinct points.
-					 *  
-					 *  Since y=mx+c, we can see that if x is as above then
-					 *
-					 *
-					 *          −B ± √(B^2−4AC)
-					 *   y = m (−−−−−−−−−−−−−−−)   + c
-					 *                2A
-					 * 
-					 */
-					
-				}/// end check width bound	
-			}/// end check height bound
-		},/// end collision()
+			var cartesian = polarToXY(mag, angle);
+			this.mov.x = cartesian.x/this.movMax;
+			this.mov.y = cartesian.y/this.movMax;
+			
+			//this.mov = new Coord(movX,movY);
+			
+		},
 		checkPaddle: function(paddle){
 			if(this.collision(paddle)){
 				if(this.hitTop){
+					this.findBounceAngle(paddle);
 					this.dir.y = -1;
 				}
 				if(this.hitLeft){
@@ -768,12 +667,12 @@ BrickGame.prototype = {
 			this.ball.draw(this.context);
 		},
 		move: function(){
-			if(this.ball != undefined){
+			if(this.ball !== undefined){
 				this.ball.checkPaddle(this.paddle);
 				this.ball.move();
-				this.clear();
-				this.draw();
 			}
+			this.clear();
+			this.draw();
 		}
 }
 ///////////////////  end BrickGame  /////////////////////
@@ -927,6 +826,98 @@ User.prototype = {
 //window.addEventListener('resize', resize, false); 
 
 
+/*																														Y=mX+b
+ * if(this.dir.y == -1){
+ * 		var ballTop = (this.pos.y - this.size) - yAmount/xAmount*this.pos.x;											b = Y - mX   based on point on ball that would hit
+		var bottomXintersect = ((rect.pos.y+rect.size.y)-ballTop)*xAmount/yAmount;										X = (Y-b) * m  or Y = mX + b point on line where ball hits 
+		if(xAmount === 0){																								if slope is vertical
+			bottomXintersect = this.pos.x																					ball's x is where it would hit
+		}
+						
+		if(bottomXintersect <= rect.pos.x + rect.size.x && bottomXintersect >= rect.pos.x){                              if the intersection point is within the line segment (edge of block)
+			yIntersect = rect.pos.y + rect.size.y;																			y on block where ball hits
+			xIntersect = bottomXintersect;																					x on block where ball hits
+			this.hitPos.x = xIntersect;																						x of ball when it hits
+			this.hitPos.y = yIntersect+this.size;																			y of ball when it hits
+			this.hitBottom = true;																							bool of which side is being checked
+			this.hitBounce = true;																							bool showing hit to keep move() from moving ball twice in one frame
+			hit = true;																										bool returned at end of function
+		}
+		else if(this.dir.x == 0){																						if slope is vertical
+			if(bottomXintersect <= rect.pos.x + rect.size.x && bottomXintersect >= rect.pos.x){								if intersection is within line segment bound
+				yIntersect = rect.pos.y + rect.size.y;																			point on block where ball hits
+				xIntercept = bottomXintersect;
+				this.hitPos.x = xIntersect;																						position of ball when it hits
+				this.hitPos.y = yIntersect+this.size;
+				this.hitBottom = true;																							bools for hit
+				this.hitBounce = true;
+			}
+			else{																											else check for corner hit
+				var xUnit45 = (1/((1**2 + 1**2)**0.5));																			x of unit vector at 45 degree angle
+				var yUnit45 = (-1/((1**2 + 1**2)**0.5));																		y of unit vector at 45 degree angle
+				var offUpperRight45 = this.pos.x + (this.size*xUnit45);															45 degrees form vertical closest point to corner being checked
+																																		should have corresponding y values so collision isn't based off the y at ball's center
+				var offUpperLeft45 = this.pos.x - (this.size*xUnit45);															the other point on ball for the other corner
+				var bottomRightXintersect45 = offUpperLeft45;																	point on line where 45 degree point on ball would hit
+				var bottomLeftXintersect45 = offUpperRight45;																	same but for other point
+				if(bottomRightXintersect45 <= rect.pos.x + rect.size.x && bottomRightXintersect45 >= rect.pos.x){				if one 45 degree point is within line segment bound
+					yIntersect = rect.pos.y+rect.size.y;																			point on block where ball hit
+					xIntersect = bottomRightXintersect45;
+					this.hitPos.x = xIntersect + this.dir.x * -1 * (this.size*xUnit45);												position of ball when it hits this is where the y of the 45 degree point is needed
+					this.hitPos.y = yIntersect - (this.size*yUnit45); 
+					this.hitBottom = true;																							bools for hit
+					this.hitBounce = true;
+					hit = true;
+				}
+				else if(bottomLeftXintersect45 <= rect.pos.x + rect.size.x && bottomLeftXintersect45 >= rect.pos.x){			else if other 45 degree point is within linesegment bound
+					yIntersect = rect.pos.y+rect.size.y;																			point on block where ball hits
+					xIntersect = bottomLeftXintersect45;
+					this.hitPos.x = xIntersect + this.dir.x * (this.size*xUnit45);													position of ball when it hits
+					this.hitPos.y = yIntersect - (this.size*yUnit45); 
+					this.hitBottom = true;																							bools for hit
+					this.hitBounce = true;
+					hit = true;
+				}
+			}
+		}						 
+		else {																											else slope is not vertical and did not hit main portion check for hitting corners
+			var offUpperRight, offUpperLeft;																				offset of points on ball that would hit the corners
+			if(this.dir.x == 1){																							calculate those offsets
+				offUpperRight = (this.pos.y + (this.size*yUnit)) - yAmount/xAmount*(this.pos.x + (this.size*xUnit));			b = Y - mX: right = (ball.y + unit vector*radius) - (slope * (ball.x + this.dir.x * (unit vector*radius)))
+				offUpperLeft = (this.pos.y + (this.size*yUnit)) - yAmount/xAmount*(this.pos.x - (this.size*xUnit));                       : left = (ball.y + (unit vector*radius)) - (slope * (ball.x + this.dir.x * -1 * (unit vector*radius)))
+			}
+			else if(this.dir.x == -1){
+				offUpperRight = (this.pos.y + (this.size*yUnit)) - yAmount/xAmount*(this.pos.x - (this.size*xUnit));					  : bottom = (ball.y + this.dir.y *(unit vector*radius)) - (slope * (ball.x + (unit vector*radius)))
+				offUpperLeft = (this.pos.y + (this.size*yUnit)) - yAmount/xAmount*(this.pos.x + (this.size*xUnit));						  : top = (ball.y + this.dir.y * -1 *(unit vector*radius)) - (slope * (ball.x + (unit vector*radius)))
+			}								
+			
+			if(offUpperRight !== undefined && offUpperLeft != undefined){
+				var bottomRightXintersect = ((rect.pos.y+rect.size.y)-offUpperLeft)*xAmount/yAmount;						point on line where one point ball would hit
+				var bottomLeftXintersect = ((rect.pos.y+rect.size.y)-offUpperRight)*xAmount/yAmount;						point on line where other point on ball would hit
+				if(bottomRightXintersect <= rect.pos.x + rect.size.x && bottomRightXintersect >= rect.pos.x){				if one point is with in line segment bounds
+					yIntersect = rect.pos.y + rect.size.y;																		point on block where ball hit
+					xIntersect = bottomRightXintersect;
+					this.hitPos.x = xIntersect + this.dir.x * -1 * (this.size*xUnit);											position of ball when it hits
+					this.hitPos.y = yIntersect - (this.size*yUnit); 
+					this.hitBottom = true;																						bools for hit
+					this.hitBounce = true;
+					hit = true;
+				}
+				else if(bottomLeftXintersect <= rect.pos.x + rect.size.x && bottomLeftXintersect >= rect.pos.x){			if other point is with in line segment bounds
+					yIntersect = rect.pos.y+rect.size.y;																		point on block where ball hit
+					xIntersect = bottomLeftXintersect;
+					this.hitPos.x = xIntersect + this.dir.x * (this.size*xUnit);												position of ball when it hits
+					this.hitPos.y = yIntersect - (this.size*yUnit); 
+					this.hitBottom = true;																						bools for hit
+					this.hitBounce = true;
+					hit = true;
+				}
+			}
+			
+		}
+	}
+ * 
+ */
 
 
 
