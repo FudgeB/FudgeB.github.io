@@ -10,11 +10,19 @@
 	</head>
 	
 	<body onload="loader()" onresize="resize()">
-		<h1>The beginnings of a page</h1>
+		<div id="topGui">
+			<div id="level">Level: </div>
+			<div id="ballCount">Balls left: </div>
+			<div id="score">Score: </div>
+		</div>
 		<div>
-			<canvas id="gameCanvas" width="400" height="400" onmousemove="mouseMoveEvent(event)" onclick="mouseClickEvent(event)">
+			<canvas id="gameCanvas" width="400" height="400" onmousemove="mouseMoveEvent(event)" ontouchmove="mouseMoveEvent(event)" onclick="mouseClickEvent(event)">
 				Canvas Brick Break Game
 			</canvas>
+		</div>
+		<div id="bottomGui"> 
+			<div id="pause" onclick="pauseGame(event)">Pause</div>
+			<div id="reset" onclick="resetGame(event)">Reset</div>
 		</div>
 	</body>
 

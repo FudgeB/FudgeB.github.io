@@ -4,10 +4,30 @@
 
 
 var canvas, context;
-var gridWidth = 20;
-var gridHeight = 12;
-var paddleWidth = 40;
-var paddleHeight = 5;
+var init_widthBrickCount = 1;
+var init_heightBrickCount = 1;
+var init_gridWidth = 100;
+var init_gridHeight = 45;
+var init_paddleWidth = 40;
+var init_paddleHeight = 5;
+var init_ballSize = 3.5;
+var init_ballSpeed = 5;
+var init_ballCount = 4;
+var init_level = 0;
+
+var movMax = 10;
+var maxAngle = 90;
+var minAngle = 25;
+var maxMagnitude = 12;
+var minMagnitude = 5;
+
+var score = 0;
+var level = init_level;
+var loseBall = false;
+var gainBall = 0;
+var gameOver = false;
+var reset = false;
+var levelUp = false;
 var playing = false;
 var ballReleased = false;
 var brickGame;
@@ -85,24 +105,20 @@ Color.prototype = {
 /////////////////////////   Square   /////////////////////////
 function Square (pos, size){//, color, speed){
 	this.size = size;
-	if(pos instanceof Coord){
-		this.pos = pos;
-//		if(this.pos.x + this.size/2 > canvas.width){
-//			this.pos.x = canvas.width - this.size/2;
-//		}
-//		else if(this.pos.x - this.size/2 < 0){
-//			this.pos.x = this.size/2;
-//		}
-//		if(this.pos.y + this.size/2 > canvas.height){
-//			this.pos.y = canvas.height - this.size/2;
-//		}
-//		else if(this.pos.y - this.size/2 < 0){
-//			this.pos.y = this.size/2;
-//		}
-	}
-	else {
-		console.log("Square: wrong type for pos")
-	}
+	this.pos = pos;
+//	if(this.pos.x + this.size/2 > canvas.width){
+//		this.pos.x = canvas.width - this.size/2;
+//	}
+//	else if(this.pos.x - this.size/2 < 0){
+//		this.pos.x = this.size/2;
+//	}
+//	if(this.pos.y + this.size/2 > canvas.height){
+//		this.pos.y = canvas.height - this.size/2;
+//	}
+//	else if(this.pos.y - this.size/2 < 0){
+//		this.pos.y = this.size/2;
+//	}
+
 }
 Square.prototype = {
 		constructor: Square,
@@ -122,17 +138,8 @@ Square.prototype = {
 function Brick (pos, brickSize){
 
 	this.outlineWidth = 3;
-	this.pos = pos;
-	this.hit = false;
-	
-	this.red = randomInt(64,192);//Math.floor(Math.random() * 128)+64;
-	this.green = randomInt(64,192);//Math.floor(Math.random() * 128)+64;
-	this.blue = randomInt(64,192);//Math.floor(Math.random() * 128)+64;
-	//this.color = new Color(red,green,blue);
-	
-	this.size = brickSize;
-//	this.size.x -= 3;
-//	this.size.y -= 3;
+	this.set(pos,brickSize);
+
 //	var sqrSize = this.size.x/3;
 //	this.squares = [];
 //	
@@ -144,6 +151,18 @@ function Brick (pos, brickSize){
 }
 Brick.prototype = {
 		constructor: Brick,
+		set: function (pos, brickSize){
+			this.pos = pos;
+			this.hit = false;
+			this.hasExtraBall = false;
+			
+			this.red = randomInt(64,192);//Math.floor(Math.random() * 128)+64;
+			this.green = randomInt(64,192);//Math.floor(Math.random() * 128)+64;
+			this.blue = randomInt(64,192);//Math.floor(Math.random() * 128)+64;
+			//this.color = new Color(red,green,blue);
+			
+			this.size = brickSize;
+		},
 		draw: function (context){
 			var color = new Color(this.red, this.green, this.blue);
 			var outline = new Color(this.red+30, this.green+30, this.blue+30);
@@ -162,28 +181,97 @@ Brick.prototype = {
 /////////////////////////  end Brick  ///////////////////////  
 
 ///////////////////////  Grid  //////////////////////////
-function Grid(pos, canvasWidth){
-	this.pos = pos;
-	this.gridSize = new Coord(gridWidth, gridHeight);
-	var brickWidth = /*brickGame.canvas.*/canvasWidth / gridWidth;
-	var brickHeight = (brickWidth/3)*2; 
-	var brickSize = new Coord(brickWidth,brickHeight);
+function Grid(canvasHeight, canvasWidth){
 	this.bricks = [];
-	
-	for(var i=0; i<gridHeight; i++){
-		for(var j=0; j<gridWidth; j++){
-			this.bricks.push(new Brick(new Coord(j*brickSize.x,pos+i*brickSize.y),brickSize))
-		}
-	}
+	this.init(canvasHeight, canvasWidth);
 }
 Grid.prototype = {
 		constructor: Grid,
+		init: function(canvasHeight, canvasWidth){
+			this.pos = new Coord(0,canvasHeight/8);
+			this.gridWidth = init_gridWidth;
+			this.gridHeight = init_gridHeight;
+			this.heightBrickCount = init_heightBrickCount;
+			this.widthBrickCount = init_widthBrickCount;
+			this.extraBallLevel = false;
+			this.makeLevel(canvasWidth, canvasHeight);
+		},
+		makeLevel: function(canvasWidth, canvasHeight){			
+			this.gridSize = new Coord(this.gridWidth/100 * canvasWidth, this.gridHeight/100 * canvasHeight);
+			var brickWidth = this.gridSize.x / this.widthBrickCount;
+			var brickHeight = this.gridSize.y/this.heightBrickCount; //(brickWidth/3)*2; 
+			var brickSize = new Coord(brickWidth,brickHeight);
+			
+			if(reset){
+				while(this.bricks.length > this.heightBrickCount*this.widthBrickCount){
+					this.bricks.pop();
+				}
+			}
+			var extraBalls = [];
+			if(this.extraBallLevel){
+				var num = this.widthBrickCount * this.heightBrickCount;
+				for(var n=0; n < Math.floor(num/10); n++){
+					extraBalls.push(randomInt(0,this.widthBrickCount * this.heightBrickCount));
+				}
+			}
+			extraBalls.sort(function(a, b){return a - b});
+		
+			for(var i=0; i<this.heightBrickCount; i++){
+				for(var j=0; j<this.widthBrickCount; j++){
+					var pos = new Coord(this.pos.x+j*brickSize.x,this.pos.y+i*brickSize.y);
+					if(i*this.widthBrickCount+j < this.bricks.length){
+						this.bricks[i*this.widthBrickCount+j].set(pos,brickSize);
+					}
+					else {
+						this.bricks.push(new Brick(pos,brickSize));
+					}
+					if(extraBalls.length > 0){
+						if(extraBalls[0] == i*this.widthBrickCount+j){
+							this.bricks[i*this.widthBrickCount+j].hasExtraBall = true;
+							extraBalls.shift();
+						}
+					}
+					else{
+						this.bricks[i*this.widthBrickCount+j].hasExtraBall = false;
+					}
+				}
+			}
+		},
+		levelUp: function(canvasWidth, canvasHeight){
+			if(level%4 == 0){
+				this.extraBallLevel = true;
+			}
+			else if(level%4 == 1){
+				this.widthBrickCount += 1;
+			}
+			else if(level%4 == 2){
+				this.heightBrickCount += 1;
+			}
+			else if(level%4 ==3){
+				this.heightBrickCount += 1;
+				this.widthBrickCount += 1;
+			}
+			this.makeLevel(canvasWidth,canvasHeight);
+			this.extraBallLevel = false;
+		},
 		draw: function(context,ball){
+			var hitCount = 0;
 			for(var l=0; l<this.bricks.length; l++){
 				if(!this.bricks[l].hit){
 					this.bricks[l].draw(context);
 					if(ball !== undefined){
 						ball.checkBrick(this.bricks[l]);
+						if(this.bricks[l].hit){
+							if(this.bricks[l].hasExtraBall){
+								gainBall += 1;
+							}
+						}
+					}
+				}
+				else{
+					hitCount++;
+					if(hitCount == this.bricks.length){
+						levelUp = true;
 					}
 				}
 			}
@@ -193,56 +281,69 @@ Grid.prototype = {
 
 ///////////////////////  Ball  /////////////////////////
 function Ball(paddle,area){
-	this.size = 3.5;
-	this.pos = new Coord(paddle.pos.x + paddle.size.x/2, paddle.pos.y - this.size);
-//	this.pos = pos;
-//	this.pos.y -= (this.size/2+1);
-//	this.startY = this.pos.y;
 	this.area = area;
-	this.isMoving = false;
-	var xDir = randomInt(-1,2);
-	while(xDir === 0){
-		xDir = randomInt(-1,2);
-	}
-	this.dir = new Coord(xDir,-1)
-//	this.movMin = 5;
-//	this.movMax = 10;
-//	//randomInt(start,end);//
-//	var movX = randomFloat(this.movMin*10, this.movMax*10)/(this.movMax*10);//Math.random();//
-//	var movY = randomFloat(this.movMin*10, this.movMax*10)/(this.movMax*10);//Math.random();//randomFloat(this.movMin,0);
-	
-	this.movMax = 10;
-	this.maxAngle = 90;
-	this.minAngle = 20;
-	this.maxMagnitude = 12;
-	this.minMagnitude = 6;
-	var mag = randomFloat(this.minMagnitude, this.maxMagnitude);
-	var angle = randomFloat(this.minAngle, this.maxAngle);
-	while(angle === 90){
-		angle = randomFloat(this.minAngle, this.maxAngle);
-	}
-	
-	var cartesian = polarToXY(mag, angle);
-	var movX = cartesian.x/this.movMax;
-	var movY = cartesian.y/this.movMax;
-	
-	this.mov = new Coord(movX,movY);
-	this.hitRect = new Coord(0,0);
-	this.intersectH = null;
-	this.intersectV = null;
-	this.hitPos = new Coord(0,0);
-	this.hitTop = false;
-	this.hitBottom = false;
-	this.hitLeft = false;
-	this.hitRight = false;
-	this.hitBounce = false;
-	//this.context = context;
+	this.dir = new Coord(-1,-1);
 	this.colors = [];
 	this.numColors = 3;
-	this.setColors();
+	
+	this.init(paddle);
+	
+
 }
 Ball.prototype = {
 		constructor: Ball,
+		init: function(paddle){
+			this.size = init_ballSize;
+			this.mag = init_ballSpeed;//randomFloat(minMagnitude, maxMagnitude);
+			this.hitRect = new Coord(0,0);
+			this.intersectH = null;
+			this.intersectV = null;
+			this.hitPos = new Coord(0,0);
+			this.setBall(paddle);
+		},
+		setBall: function(paddle){
+			this.pos = new Coord(paddle.pos.x + paddle.size.x/2, paddle.pos.y - this.size);
+			this.isMoving = false;
+			var xDir = randomInt(-1,2);
+			while(xDir === 0){
+				xDir = randomInt(-1,2);
+			}
+			this.dir.x = xDir;
+			this.dir.y = -1;
+		
+		//	//randomInt(start,end);//
+		//	var movX = randomFloat(this.movMin*10, this.movMax*10)/(this.movMax*10);//Math.random();//
+		//	var movY = randomFloat(this.movMin*10, this.movMax*10)/(this.movMax*10);//Math.random();//randomFloat(this.movMin,0);
+		
+			
+			var angle = randomFloat(minAngle, maxAngle);
+			while(angle === 90){
+				angle = randomFloat(minAngle, maxAngle);
+			}
+			
+			var cartesian = polarToXY(this.mag, angle);
+			var movX = cartesian.x/movMax;
+			var movY = cartesian.y/movMax;
+			
+			this.mov = new Coord(movX,movY);
+			this.hitTop = false;
+			this.hitBottom = false;
+			this.hitLeft = false;
+			this.hitRight = false;
+			this.hitBounce = false;
+			//this.context = context;
+			this.setColors();
+		},
+		levelUp: function(paddle){
+			var increase = maxMagnitude/150;
+			if(this.mag + increase <= maxMagnitude){
+				this.mag += increase;
+			}
+			else{
+				this.mag = minMagnitude;
+			}
+			this.setBall(paddle);
+		},
 		draw: function(context){
 			//this.context.fillStyle = this.gradient;
 			//this.context.fillRect(this.pos.x-this.size, this.pos.y-this.size, this.size*2, this.size*2);
@@ -272,8 +373,8 @@ Ball.prototype = {
 			}
 		},
 		move: function(){
-			var xAmount = this.mov.x*this.movMax*this.dir.x;
-			var yAmount = this.mov.y*this.movMax*this.dir.y;
+			var xAmount = this.mov.x * movMax* this.dir.x;
+			var yAmount = this.mov.y * movMax* this.dir.y;
 			if(this.isMoving){
 				if(!this.hitBounce){
 					if(this.pos.x + xAmount < this.size){
@@ -293,8 +394,9 @@ Ball.prototype = {
 					}
 					else if(this.pos.y + yAmount > this.area.y-this.size){
 						//// lose ball
-						this.pos.y = this.area.y-this.size;
-						this.dir.y *= -1;
+						//this.pos.y = this.area.y-this.size;
+						//this.dir.y *= -1;
+						loseBall = true;
 					}
 					else{
 						this.pos.y += yAmount;
@@ -307,7 +409,7 @@ Ball.prototype = {
 				}
 			}
 		},
-		followPaddle: function(paddle){//,posY,paddleHeight){
+		followPaddle: function(paddle){//,posY,init_paddleHeight){
 			this.pos.x = paddle.pos.x + paddle.size.x/2;
 			this.pos.y = paddle.pos.y - this.size;
 			
@@ -431,8 +533,8 @@ Ball.prototype = {
 			return where;
 		},
 		collision: function (rect){
-			var xAmount = this.mov.x*this.movMax*this.dir.x;
-			var yAmount = this.mov.y*this.movMax*this.dir.y;
+			var xAmount = this.mov.x*movMax*this.dir.x;
+			var yAmount = this.mov.y*movMax*this.dir.y;
 			var slope = new Coord(xAmount, yAmount);
 			
 			var xUnit = (xAmount/((xAmount**2 + yAmount**2)**0.5));
@@ -519,15 +621,15 @@ Ball.prototype = {
 				this.dir = new Coord(xDir,-1)
 			}
 			
-			var angle = (this.maxAngle - this.minAngle) * (rect.size.x/2 - Math.abs(this.intersectH.x - (rect.pos.x+rect.size.x/2)))/(rect.size.x/2) + this.minAngle;
+			var angle = (maxAngle - minAngle) * (rect.size.x/2 - Math.abs(this.intersectH.x - (rect.pos.x+rect.size.x/2)))/(rect.size.x/2) + minAngle;
 			if(angle === 90){
 				angle -= 0.1;
 			}	
-			var mag = randomFloat(this.minMagnitude, this.maxMagnitude);
+			//this.mag = randomFloat(minMagnitude, maxMagnitude);
 
-			var cartesian = polarToXY(mag, angle);
-			this.mov.x = cartesian.x/this.movMax;
-			this.mov.y = cartesian.y/this.movMax;
+			var cartesian = polarToXY(this.mag, angle);
+			this.mov.x = cartesian.x/movMax;
+			this.mov.y = cartesian.y/movMax;
 			
 			//this.mov = new Coord(movX,movY);
 			
@@ -572,6 +674,8 @@ Ball.prototype = {
 				this.hitBottom = false;
 				this.hitLeft = false;
 				this.hitRight = false;
+				score += level+1;
+				upadateTopGui();
 			}
 		}
 }
@@ -579,7 +683,7 @@ Ball.prototype = {
 
 ///////////////////////  Paddle  ////////////////////////
 function Paddle(pos, canvasWidth){
-	this.size = new Coord(paddleWidth, paddleHeight);
+	this.size = new Coord(init_paddleWidth, init_paddleHeight);
 	this.pos = new Coord(canvasWidth/2, pos);
 	this.colorFill = new Color(50, 50, 50);
 	this.colorOutline = new Color(100, 100, 100);
@@ -617,19 +721,36 @@ function BrickGame(){
 	if(this.canvas.getContext){
 		this.context = this.canvas.getContext('2d');
 	}
-	this.grid = new Grid(this.canvas.height/8, this.canvas.width);
-	this.paddle = new Paddle(this.canvas.height-(paddleHeight*3),this.canvas.width);
-
-	this.ball = new Ball(this.paddle, new Coord(this.canvas.width,this.canvas.height));// ,this.context);
-	
+	level = init_level;
+	this.ballCount = init_ballCount;
+	this.paddle = new Paddle(this.canvas.height-(init_paddleHeight*3),this.canvas.width);
+	this.grid = new Grid(this.canvas.height, this.canvas.width);
+	this.ball = new Ball(this.paddle, new Coord(this.canvas.width,this.canvas.height));
 	this.gradient = this.context.createRadialGradient(this.canvas.width/2,this.canvas.height/2,0,
 			this.canvas.width/2,this.canvas.height/2,this.canvas.width/2);
 	this.setBackgroundColors();
+	
 	playing = true;
 	//this.canvas.addEventListener('mousemove',mouseMoveEvent(event,this));
 }
 BrickGame.prototype = {
 		constructor:BrickGame,
+		reset: function(){
+			this.grid.init(this.canvas.height, this.canvas.width);
+			this.ball.init(this.paddle);
+			this.ballCount = init_ballCount;
+			this.colorLevel();
+			level = init_level;
+			score = 0;
+			upadateTopGui();
+			playing = true;
+			gameOver = false;
+		},
+		colorLevel: function(){
+			this.gradient = this.context.createRadialGradient(this.canvas.width/2,this.canvas.height/2,0,
+					this.canvas.width/2,this.canvas.height/2,this.canvas.width/2);
+			this.setBackgroundColors();
+		},
 		setBackgroundColors: function(){
 			var colors = [];
 			var numColors = 3;
@@ -642,15 +763,25 @@ BrickGame.prototype = {
 			this.gradient.addColorStop(0.5,colors[1].rgbString());//"rgb(200, 100, 150)");
 			this.gradient.addColorStop(1,colors[2].rgbString());//"rgb(15, 150, 150)");
 		},
+		levelUp:function(){
+			level += 1;
+			upadateTopGui();
+			this.ball.levelUp(this.paddle);
+			this.grid.levelUp(this.canvas.height, this.canvas.width);
+			this.colorLevel();
+		},
 		clear: function(){
 			// Create gradient
 			var context = this.context;
 			//var gradient = context.createRadialGradient(this.canvas.width/2,this.canvas.height/2,0,
 			//		this.canvas.width/2,this.canvas.height/2,this.canvas.width/2);
-			//  nice colors to recall later
-			// 0: Color {red: 166, green: 198, blue: 123}
-			// 1: Color {red: 82, green: 175, blue: 23}
-			// 2: Color {red: 21, green: 38, blue: 24}
+			
+			/*
+			 * nice colors to recall later
+			 * 0: Color {red: 166, green: 198, blue: 123}
+			 * 1: Color {red: 82, green: 175, blue: 23}
+			 * 2: Color {red: 21, green: 38, blue: 24}
+			 */
 			
 			
 			//gradient.addColorStop(0,this.backgroundColors[0].rgbString());//"rgb(100, 200, 150)");
@@ -671,8 +802,33 @@ BrickGame.prototype = {
 				this.ball.checkPaddle(this.paddle);
 				this.ball.move();
 			}
+			if(loseBall){
+				this.ballCount -= 1;
+				score -= level;
+				if(this.ballCount >= 0){
+					this.ball.setBall(this.paddle);
+					ballReleased = false;
+					loseBall = false;
+					upadateTopGui();
+				}
+				else {
+					playing = false;
+					gameOver = true;
+				}
+			}
+			while(gainBall > 0){
+				gainBall -= 1;
+				this.ballCount += 1;
+			}
 			this.clear();
 			this.draw();
+			if(gameOver){
+				this.context.font = "30px Bookman";
+				this.context.fillStyle = "Black";
+				this.context.textAlign = "center";
+				this.context.fillText("No balls left", this.canvas.width/2, this.canvas.height/2);
+				this.context.fillText("Press Reset to play again", this.canvas.width/2, this.canvas.height/2 + 30);
+			}
 		}
 }
 ///////////////////  end BrickGame  /////////////////////
@@ -694,34 +850,22 @@ function resize() {
     canvas.style.height = canvas_height + 'px';
 }
 
-function drawBeginning(){
-
-//	if(canvas.getContext){
-//		context = canvas.getContext('2d');
-//		
-//		var grid = new Grid(canvas.height/8);
-//		grid.draw(context);
-//		
-//		var paddle = new Paddle(canvas.height-(paddleHeight*3));
-//		paddle.draw(context);
-//		
-//		//canvas.addEventListener(onmouseover) =
-//		// onmouseout
-//		// onmousemove
-//
-//		
-////		context.fillStyle = 'rgb(100, 200, 150)';
-////		context.fillRect(10, 10, 50, 50);
-//
-//
-////		red = Math.floor(Math.random() * 255);
-//
-//	}
-
+function upadateTopGui(){
+	var levelText = document.getElementById('level');
+	levelText.innerHTML = 'Level: ' + level;
+	var ballText = document.getElementById('ballCount');
+	ballText.innerHTML = 'Extra Balls: ' + brickGame.ballCount;
+	var scoreText = document.getElementById('score');
+	scoreText.innerHTML = 'Score: ' + score;
 }
 
 function mover(){
 	if(playing){
+		if(levelUp){
+			brickGame.levelUp();
+			ballReleased = false;
+			levelUp = false;
+		}
 		brickGame.move();
 	}
 }
@@ -731,8 +875,8 @@ function loader(){
 	brickGame = new BrickGame();
 	brickGame.clear();
 	brickGame.draw();
+	upadateTopGui();
 	timer = window.setInterval(mover,50);
-	//drawBeginning();
 }
 
 function mouseMoveEvent(event){
@@ -761,15 +905,44 @@ function mouseClickEvent(event){
 		brickGame.ball.isMoving = true;
 		ballReleased = true;
 	}
-	else{
-		if(!brickGame.ball.isMoving){
-			brickGame.ball.isMoving = true;
+//	else{
+//		if(!brickGame.ball.isMoving){
+//			brickGame.ball.isMoving = true;
+//		}
+//		else {
+//			brickGame.ball.isMoving = false;
+//		}
+//		//ballReleased = false;
+//		//brickGame.ball.followPaddle(brickGame.paddle.pos.x);
+//	}
+}
+
+var pauseColor = undefined;
+
+function pauseGame(event){
+	var pause = document.getElementById('pause');
+	if(!brickGame.ball.isMoving){
+		brickGame.ball.isMoving = true;
+		pause.style.backgroundColor = pauseColor;
+		pause.innerHTML = "Pause";
+	}
+	else {
+		brickGame.ball.isMoving = false;
+		if(pauseColor === undefined){
+			pauseColor = pause.style.backgroundColor;
 		}
-		else {
-			brickGame.ball.isMoving = false;
-		}
-		//ballReleased = false;
-		//brickGame.ball.followPaddle(brickGame.paddle.pos.x);
+		pause.style.backgroundColor = '#904040';
+		pause.innerHTML = "Resume";
+	}
+}
+
+function resetGame(event){
+	//pauseGame(event);
+	if(window.confirm("Are you sure you want to reset?")){
+		reset = true;
+		brickGame.reset();
+		ballReleased = false;
+		reset = false;
 	}
 }
 
