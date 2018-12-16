@@ -677,6 +677,9 @@ Ball.prototype = {
 				score += level+1;
 				upadateTopGui();
 			}
+		},
+		checkIfOnGrid: function(x,y,width,height){
+			
 		}
 }
 ////////////////////  end Ball  ////////////////////////
@@ -880,15 +883,33 @@ function loader(){
 }
 
 function mouseMoveEvent(event){
-	//var rect = canvas.getBoundingClientRect();
-    //return {
-   //   x: evt.clientX - rect.left,
-    //  y: evt.clientY - rect.top
+
+	//var rect = brickGame.canvas.getBoundingClientRect();
+	moveInput(event.clientX, event.clientY);
+	//var scaleX = brickGame.canvas.width / rect.width;
+	//var scaleY = brickGame.canvas.height / rect.height;
+	//var posX = (event.clientX - rect.left)*scaleX;
+	//var posY = (event.clientY - rect.top)*scaleY;
+//	if (playing === true) {
+//		var paddle = brickGame.paddle;
+//		paddle.move(posX, posY);
+//		if(!ballReleased){
+//			brickGame.ball.followPaddle(paddle);//,paddle.pos.y,paddle.size.y);
+//		}
+//		brickGame.clear();
+//		brickGame.draw();
+//	}
+}
+function touchMoveEvent(event){
+	var touch = event.touches[0];
+	moveInput(touch.clientX, touch.clientY);
+}
+function moveInput(xInput, yInput){
 	var rect = brickGame.canvas.getBoundingClientRect();
 	var scaleX = brickGame.canvas.width / rect.width;
 	var scaleY = brickGame.canvas.height / rect.height;
-	var posX = (event.clientX - rect.left)*scaleX;
-	var posY = (event.clientY - rect.top)*scaleY;
+	var posX = (xInput - rect.left)*scaleX;
+	var posY = (yInput - rect.top)*scaleY;
 	if (playing === true) {
 		var paddle = brickGame.paddle;
 		paddle.move(posX, posY);
@@ -899,6 +920,15 @@ function mouseMoveEvent(event){
 		brickGame.draw();
 	}
 }
+
+//canvas.addEventListener("touchmove", function (e) {
+//	  var touch = e.touches[0];
+//	  var mouseEvent = new MouseEvent("mousemove", {
+//	    clientX: touch.clientX,
+//	    clientY: touch.clientY
+//	  });
+//	  canvas.dispatchEvent(mouseEvent);
+//	}, false);
 
 function mouseClickEvent(event){
 	if(!ballReleased){
@@ -921,13 +951,15 @@ var pauseColor = undefined;
 
 function pauseGame(event){
 	var pause = document.getElementById('pause');
-	if(!brickGame.ball.isMoving){
-		brickGame.ball.isMoving = true;
+	if(!playing/*brickGame.ball.isMoving*/){
+		//brickGame.ball.isMoving = true;
+		playing = true;
 		pause.style.backgroundColor = pauseColor;
 		pause.innerHTML = "Pause";
 	}
 	else {
-		brickGame.ball.isMoving = false;
+		//brickGame.ball.isMoving = false;
+		playing = false;
 		if(pauseColor === undefined){
 			pauseColor = pause.style.backgroundColor;
 		}
